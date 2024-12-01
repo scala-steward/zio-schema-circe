@@ -15,7 +15,7 @@ object CirceCodec {
   final case class Config(
     ignoreEmptyCollections: Boolean,
     ignoreNullValues: Boolean = true,
-    ignoreMalformedFields: Boolean = true, 
+    ignoreMalformedFields: Boolean = true,
     treatStreamsAsArrays: Boolean = false,
   )
 
