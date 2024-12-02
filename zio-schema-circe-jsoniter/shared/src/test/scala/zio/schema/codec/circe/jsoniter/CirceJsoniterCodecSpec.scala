@@ -1,10 +1,9 @@
-package zio.schema.codec.circe
+package zio.schema.codec.circe.jsoniter
 
 import zio.durationInt
 import zio.schema._
 import zio.schema.codec.circe._
 import zio.schema.codec.circe.internal._
-import zio.schema.codec.circe.jsoniter._
 import zio.test.TestAspect._
 import zio.test._
 

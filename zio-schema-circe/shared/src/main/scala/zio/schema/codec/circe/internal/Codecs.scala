@@ -8,7 +8,6 @@ import zio.schema.codec.circe.CirceCodec
 import zio.{Chunk, ChunkBuilder}
 
 import java.time.temporal.Temporal
-import scala.annotation.unused
 import scala.collection.immutable.ListMap
 
 private[circe] object Codecs extends Codecs
@@ -21,9 +20,11 @@ private[circe] trait Codecs {
     Encoder.AsArray.instance[Chunk[A]](_.map(encoder(_)).toVector)
 
   def decodeChunk[A](implicit decoder: Decoder[A]): Decoder[Chunk[A]] =
-    Decoder.decodeVector(decoder).map(Chunk.from)
+    Decoder.decodeVector(decoder).map(Chunk.fromIterable)
 
-  def decodeFail[A](message: String): Decoder[A] = c => Left(DecodingFailure(message, c.history))
+  def decodeFail[A](message: String): Decoder[A] = new Decoder[A] {
+    override def apply(c: HCursor): Decoder.Result[A] = Left(DecodingFailure(message, c.history))
+  }
 
   protected def parseJavaTime[A](f: String => A, s: String): Either[String, A] = {
     try {
@@ -212,7 +213,7 @@ private[circe] trait Codecs {
       Decoder.decodeEither("Left", "Right")(decodeSchema(left, -1), decodeSchema(right, -1))
     case s @ Schema.Fallback(_, _, _, _)               => decodeFallback(s)
     case l @ Schema.Lazy(_)                            => decodeSchema(l.schema, discriminator)
-    case s @ Schema.CaseClass0(_, _, _)                => decodeCaseClass0(s, discriminator)
+    case s @ Schema.CaseClass0(_, _, _)                => decodeCaseClass0(s)
     case s @ Schema.CaseClass1(_, _, _, _)             => decodeCaseClass1(s, discriminator)
     case s @ Schema.CaseClass2(_, _, _, _, _)          => decodeCaseClass2(s, discriminator)
     case s @ Schema.CaseClass3(_, _, _, _, _, _)       => decodeCaseClass3(s, discriminator)
@@ -298,10 +299,12 @@ private[circe] trait Codecs {
     case Schema.Primitive(StandardType.LongType, _)   => Some(KeyEncoder.encodeKeyLong)
     case Schema.Primitive(StandardType.IntType, _)    => Some(KeyEncoder.encodeKeyInt)
     case Schema.Transform(c, _, g, a, _)              =>
-      encodeField(a.foldLeft(c)((s, a) => s.annotate(a))).map { encoder => (b: B) =>
-        g(b) match {
-          case Left(reason) => throw new RuntimeException(s"Failed to encode field $b: $reason")
-          case Right(a)     => encoder(a)
+      encodeField(a.foldLeft(c)((s, a) => s.annotate(a))).map { encoder =>
+        new KeyEncoder[B] {
+          override def apply(b: B): String = g(b) match {
+            case Left(reason) => throw new RuntimeException(s"Failed to encode field $b: $reason")
+            case Right(field) => encoder(field)
+          }
         }
       }
     case Schema.Lazy(inner)                           => encodeField(inner())
@@ -336,7 +339,7 @@ private[circe] trait Codecs {
       encodeChunk(
         Encoder.encodeTuple2(encodeSchema(ks, config, discriminatorTuple), encodeSchema(vs, config, discriminatorTuple)),
       )
-        .contramap[Map[K, V]](Chunk.from)
+        .contramap[Map[K, V]](Chunk.fromIterable)
   }
 
   def decodeMap[K, V](ks: Schema[K], vs: Schema[V]): Decoder[Map[K, V]] = decodeField(ks) match {
@@ -363,10 +366,11 @@ private[circe] trait Codecs {
           case DynamicValue.Record(_, values)              =>
             val fields = values.map { case (k, v) =>
               val json = encoder(v)
-              Option.when {
+              if (
                 (!config.ignoreEmptyCollections || !isEmptyJsonArray(json)) &&
                 (!config.ignoreNullValues || !json.isNull)
-              }(k -> json)
+              ) Some(k -> json)
+              else None
             }
             Json.obj(fields.collect { case Some(kv) => kv }.toSeq: _*)
           case DynamicValue.Enumeration(_, _)              =>
@@ -374,21 +378,23 @@ private[circe] trait Codecs {
           case DynamicValue.Sequence(values)               =>
             val maybeValues = values.map { case v =>
               val json = encoder(v)
-              Option.when {
+              if (
                 (!config.ignoreEmptyCollections || !isEmptyJsonArray(json)) &&
                 (!config.ignoreNullValues || !json.isNull)
-              }(json)
+              ) Some(json)
+              else None
             }
             Json.arr(maybeValues.flatten: _*)
           case DynamicValue.Dictionary(_)                  =>
             throw new Exception(s"DynamicValue.Dictionary is not supported in directDynamicMapping mode")
           case DynamicValue.SetValue(values)               =>
-            val maybeValues = Chunk.from(values).map { case v =>
+            val maybeValues = Chunk.fromIterable(values).map { case v =>
               val json = encoder(v)
-              Option.when {
+              if (
                 (!config.ignoreEmptyCollections || !isEmptyJsonArray(json)) &&
                 (!config.ignoreNullValues || !json.isNull)
-              }(json)
+              ) Some(json)
+              else None
             }
             Json.arr(maybeValues.flatten: _*)
           case DynamicValue.Primitive(value, standardType) => encodePrimitive(standardType)(value)
@@ -426,8 +432,8 @@ private[circe] trait Codecs {
     schema: Schema[A],
     g: B => Either[String, A],
     config: CirceCodec.Config,
-  ): Encoder[B] = (b: B) => {
-    g(b) match {
+  ): Encoder[B] = new Encoder[B] {
+    override def apply(b: B): Json = g(b) match {
       case Left(_)  => Json.Null
       case Right(a) => encodeSchema(schema, config)(a)
     }
@@ -446,38 +452,42 @@ private[circe] trait Codecs {
             case_.caseName
         }.toMap
       }
-    } else { (value: Z) =>
-      val nonTransientCase = {
-        try
-          cases.collectFirst {
-            case c @ Schema.Case(_, _, _, _, _, annotations) if annotations.collectFirst { case _: transientCase =>
-                  ()
-                }.isEmpty && c.deconstructOption(value).isDefined =>
-              c
+    } else {
+      new Encoder[Z] {
+        override def apply(value: Z): Json = {
+          val nonTransientCase = {
+            try
+              cases.collectFirst {
+                case c @ Schema.Case(_, _, _, _, _, annotations) if annotations.collectFirst { case _: transientCase =>
+                      ()
+                    }.isEmpty && c.deconstructOption(value).isDefined =>
+                  c
+              }
+            catch {
+              case ex: Throwable => throw new RuntimeException(s"Failed to encode enum type $schema", ex)
+            }
           }
-        catch {
-          case ex: Throwable => throw new RuntimeException(s"Failed to encode enum type $schema", ex)
+
+          nonTransientCase match {
+            case None        => Json.obj()
+            case Some(case_) =>
+              val caseName = case_.caseName
+
+              val discriminatorChunk = schema.annotations.collect { case d: discriminatorName =>
+                (d, caseName)
+              }
+              val noDiscriminators   = schema.noDiscriminator
+
+              val enumJson = encodeSchema(
+                case_.schema.asInstanceOf[Schema[Any]],
+                config,
+                discriminatorTuple = if (noDiscriminators) Chunk.empty else discriminatorChunk,
+              )(case_.deconstruct(value))
+
+              if (discriminatorChunk.nonEmpty || noDiscriminators) enumJson
+              else Json.obj(KeyEncoder.encodeKeyString(caseName) -> enumJson)
+          }
         }
-      }
-
-      nonTransientCase match {
-        case None        => Json.obj()
-        case Some(case_) =>
-          val caseName = case_.caseName
-
-          val discriminatorChunk = schema.annotations.collect { case d: discriminatorName =>
-            (d, caseName)
-          }
-          val noDiscriminators   = schema.noDiscriminator
-
-          val enumJson = encodeSchema(
-            case_.schema.asInstanceOf[Schema[Any]],
-            config,
-            discriminatorTuple = if (noDiscriminators) Chunk.empty else discriminatorChunk,
-          )(case_.deconstruct(value))
-
-          if (discriminatorChunk.nonEmpty || noDiscriminators) enumJson
-          else Json.obj(KeyEncoder.encodeKeyString(caseName) -> enumJson)
       }
     }
   }
@@ -511,57 +521,59 @@ private[circe] trait Codecs {
         case _                 => false
       }
 
-      (c: HCursor) => {
-        if (noDiscriminators) {
-          cases.foldLeft[Option[Z]](None) {
-            case (result @ Some(_), _) => result
-            case (_, case_)            =>
-              decodeSchema(case_.schema)(c).toOption.map(_.asInstanceOf[Z])
-          } match {
-            case Some(value) => Right(value)
-            case None        => Left(DecodingFailure("None of the subtypes could decode the data", c.history))
-          }
-        } else {
-          val maybeDiscriminatorName =
-            parentSchema.annotations.collectFirst { case d: discriminatorName => d.tag }
+      new Decoder[Z] {
+        override def apply(c: HCursor): Decoder.Result[Z] = {
+          if (noDiscriminators) {
+            cases.foldLeft[Option[Z]](None) {
+              case (result @ Some(_), _) => result
+              case (_, case_)            =>
+                decodeSchema(case_.schema)(c).toOption.map(_.asInstanceOf[Z])
+            } match {
+              case Some(value) => Right(value)
+              case None        => Left(DecodingFailure("None of the subtypes could decode the data", c.history))
+            }
+          } else {
+            val maybeDiscriminatorName =
+              parentSchema.annotations.collectFirst { case d: discriminatorName => d.tag }
 
-          maybeDiscriminatorName match {
-            case None =>
-              c.keys.flatMap(_.headOption) match {
-                case Some(caseName) =>
-                  val subtype = deAliasCaseName(caseName, caseNameAliases)
-                  cases.find(_.id == subtype) match {
-                    case Some(case_) =>
-                      c.downField(caseName).success match {
-                        case None             => Left(DecodingFailure("Unrecognized subtype", c.history))
-                        case Some(caseCursor) =>
-                          decodeSchema(case_.schema)(caseCursor).map(_.asInstanceOf[Z])
-                      }
-                    case None        => Left(DecodingFailure("Unrecognized subtype", c.history))
-                  }
-                case None           =>
-                  Left(DecodingFailure("Unrecognized subtype", c.history))
-              }
+            maybeDiscriminatorName match {
+              case None =>
+                c.keys.flatMap(_.headOption) match {
+                  case Some(field) =>
+                    val subtype = deAliasCaseName(field, caseNameAliases)
+                    cases.find(_.id == subtype) match {
+                      case Some(case_) =>
+                        c.downField(field).success match {
+                          case None             => Left(DecodingFailure("Unrecognized subtype", c.history))
+                          case Some(caseCursor) =>
+                            decodeSchema(case_.schema)(caseCursor).map(_.asInstanceOf[Z])
+                        }
+                      case None        => Left(DecodingFailure("Unrecognized subtype", c.history))
+                    }
+                  case None        =>
+                    Left(DecodingFailure("Unrecognized subtype", c.history))
+                }
 
-            case Some(discriminatorName) =>
-              c.keys.getOrElse(Iterable.empty).zipWithIndex.collectFirst[Either[DecodingFailure, (Int, String)]] {
-                case (name, index) if deAliasCaseName(name, caseNameAliases) == discriminatorName =>
-                  c.downField(name).as[String] match {
-                    case Left(error)          => Left(error)
-                    case Right(discriminator) =>
-                      Right((index, deAliasCaseName(discriminator, caseNameAliases)))
-                  }
-              } match {
-                case None                                  => Left(DecodingFailure("Unrecognized subtype", c.history))
-                case Some(Left(error))                     => Left(error)
-                case Some(Right((discriminator, subtype))) =>
-                  cases.find(_.id == subtype) match {
-                    case Some(case_) =>
-                      decodeSchema(case_.schema, discriminator)(c).map(_.asInstanceOf[Z])
-                    case None        =>
-                      Left(DecodingFailure("Unrecognized subtype", c.history))
-                  }
-              }
+              case Some(discriminator) =>
+                c.keys.getOrElse(Iterable.empty).zipWithIndex.collectFirst[Either[DecodingFailure, (Int, String)]] {
+                  case (name, index) if deAliasCaseName(name, caseNameAliases) == discriminator =>
+                    c.downField(name).as[String] match {
+                      case Left(error)  => Left(error)
+                      case Right(value) =>
+                        Right((index, deAliasCaseName(value, caseNameAliases)))
+                    }
+                } match {
+                  case None                                  => Left(DecodingFailure("Unrecognized subtype", c.history))
+                  case Some(Left(error))                     => Left(error)
+                  case Some(Right((discriminator, subtype))) =>
+                    cases.find(_.id == subtype) match {
+                      case Some(case_) =>
+                        decodeSchema(case_.schema, discriminator)(c).map(_.asInstanceOf[Z])
+                      case None        =>
+                        Left(DecodingFailure("Unrecognized subtype", c.history))
+                    }
+                }
+            }
           }
         }
       }
@@ -577,44 +589,50 @@ private[circe] trait Codecs {
     }
   }
 
-  def decodeFallback[A, B](schema: Schema.Fallback[A, B]): Decoder[Fallback[A, B]] = (c: HCursor) => {
-    if (c.value.isArray) {
-      c.values.toList.flatten match {
-        case Nil                  => Left(DecodingFailure("Empty array on fallback", c.history))
-        case left :: right :: Nil =>
-          left.as(decodeSchema(schema.left)) match {
-            case Left(_)      => right.as(decodeSchema(schema.right)).map(Fallback.Right(_))
-            case Right(first) =>
-              if (!schema.fullDecode) Right(Fallback.Left(first))
-              else
-                right.as(decodeSchema(schema.right)) match {
-                  case Left(_)       => Right(Fallback.Left(first))
-                  case Right(second) => Right(Fallback.Both(first, second))
-                }
+  def decodeFallback[A, B](schema: Schema.Fallback[A, B]): Decoder[Fallback[A, B]] = new Decoder[Fallback[A, B]] {
+    override def apply(c: HCursor) = {
+      if (c.value.isArray) {
+        c.values.toList.flatten match {
+          case Nil                  => Left(DecodingFailure("Empty array on fallback", c.history))
+          case left :: right :: Nil =>
+            left.as(decodeSchema(schema.left)) match {
+              case Left(_)      => right.as(decodeSchema(schema.right)).map(Fallback.Right(_))
+              case Right(first) =>
+                if (!schema.fullDecode) Right(Fallback.Left(first))
+                else
+                  right.as(decodeSchema(schema.right)) match {
+                    case Left(_)       => Right(Fallback.Left(first))
+                    case Right(second) => Right(Fallback.Both(first, second))
+                  }
+            }
+          case _                    => Left(DecodingFailure("Too many items on fallback", c.history))
+        }
+      } else {
+        decodeSchema(schema.left)(c).map(Fallback.Left(_)).left.flatMap { _ =>
+          decodeSchema(schema.right)(c).map(Fallback.Right(_)).left.flatMap { _ =>
+            decodeFail("Fallback decoder was unable to decode both left and right sides")(c)
           }
-        case _                    => Left(DecodingFailure("Too many items on fallback", c.history))
+        }
       }
-    } else {
-      decodeSchema(schema.left)(c).map(Fallback.Left(_)) orElse
-        decodeSchema(schema.right)(c).map(Fallback.Right(_)) orElse
-        decodeFail("Fallback decoder was unable to decode both left and right sides")(c)
     }
   }
 
   private def encodeRecord[Z](
     structure: Seq[Schema.Field[Z, _]],
     config: CirceCodec.Config,
-  ): Encoder[ListMap[String, _]] = (value: ListMap[String, _]) => {
-    if (structure.isEmpty) Json.obj()
-    else {
-      Json.obj(
-        structure.collect {
-          case f @ Schema.Field(_, a, _, _, _, _)
-              if !f.transient && !isEmptyOptionalValue(f, value(f.fieldName), config) =>
-            KeyEncoder.encodeKeyString(f.fieldName) ->
-              encodeSchema(a.asInstanceOf[Schema[Any]], config)(value(f.fieldName))
-        }: _*,
-      )
+  ): Encoder[ListMap[String, _]] = new Encoder[ListMap[String, _]] {
+    override def apply(value: ListMap[String, _]) = {
+      if (structure.isEmpty) Json.obj()
+      else {
+        Json.obj(
+          structure.collect {
+            case f @ Schema.Field(_, a, _, _, _, _)
+                if !f.transient && !isEmptyOptionalValue(f, value(f.fieldName), config) =>
+              KeyEncoder.encodeKeyString(f.fieldName) ->
+                encodeSchema(a.asInstanceOf[Schema[Any]], config)(value(f.fieldName))
+          }: _*,
+        )
+      }
     }
   }
 
@@ -632,76 +650,82 @@ private[circe] trait Codecs {
   def decodeRecord[Z](
     structure: Seq[Schema.Field[Z, _]],
     rejectAdditionalFields: Boolean,
-  ): Decoder[ListMap[String, Any]] = (c: HCursor) => {
-    c.as[JsonObject].flatMap { obj =>
-      try {
-        val builder: ChunkBuilder[(String, Any)] = ChunkBuilder.make[(String, Any)](structure.size)
-        obj.toIterable.foreach { case (key, value) =>
-          structure.find(_.nameAndAliases.contains(key)) match {
-            case Some(s @ Schema.Field(_, schema, _, _, _, _)) =>
-              val fieldName = s.fieldName
-              decodeSchema(schema)(value.hcursor) match {
-                case Left(error)  => throw error
-                case Right(value) =>
-                  builder +=
-                    KeyDecoder
-                      .decodeKeyString(fieldName)
-                      .getOrElse(throw DecodingFailure(s"Failed to decode field: $fieldName", c.history)) -> value
-              }
-            case None if rejectAdditionalFields                =>
-              throw DecodingFailure(s"Unexpected field: $key", c.history)
-            case None                                          => ()
+  ): Decoder[ListMap[String, Any]] = new Decoder[ListMap[String, Any]] {
+    override def apply(c: HCursor) = {
+      c.as[JsonObject].flatMap { obj =>
+        try {
+          val builder: ChunkBuilder[(String, Any)] = ChunkBuilder.make[(String, Any)](structure.size)
+          obj.toIterable.foreach { case (key, value) =>
+            structure.find(_.nameAndAliases.contains(key)) match {
+              case Some(s @ Schema.Field(_, schema, _, _, _, _)) =>
+                val fieldName = s.fieldName
+                decodeSchema(schema)(value.hcursor) match {
+                  case Left(error)  => throw error
+                  case Right(value) =>
+                    builder +=
+                      KeyDecoder
+                        .decodeKeyString(fieldName)
+                        .getOrElse(throw DecodingFailure(s"Failed to decode field: $fieldName", c.history)) -> value
+                }
+              case None if rejectAdditionalFields                =>
+                throw DecodingFailure(s"Unexpected field: $key", c.history)
+              case None                                          => ()
+            }
           }
-        }
 
-        val tuples                       = builder.result()
-        val collectedFields: Set[String] = tuples.map { case (fieldName, _) => fieldName }.toSet
-        val resultBuilder                = ListMap.newBuilder[String, Any]
+          val tuples                       = builder.result()
+          val collectedFields: Set[String] = tuples.map { case (fieldName, _) => fieldName }.toSet
+          val resultBuilder                = ListMap.newBuilder[String, Any]
 
-        // add fields with default values if they are not present in the JSON
-        structure.foreach { field =>
-          if (!collectedFields.contains(field.fieldName) && field.optional && field.defaultValue.isDefined) {
-            val value = field.fieldName -> field.defaultValue.get
-            resultBuilder += value
+          // add fields with default values if they are not present in the JSON
+          structure.foreach { field =>
+            if (!collectedFields.contains(field.fieldName) && field.optional && field.defaultValue.isDefined) {
+              val value = field.fieldName -> field.defaultValue.get
+              resultBuilder += value
+            }
           }
+          Right((resultBuilder ++= tuples).result())
+        } catch {
+          case df: DecodingFailure => Left(df)
+          case e: Exception        => Left(DecodingFailure(e.getMessage(), c.history))
         }
-        Right((resultBuilder ++= tuples).result())
-      } catch {
-        case df: DecodingFailure => Left(df)
-        case e: Exception        => Left(DecodingFailure(e.getMessage(), c.history))
       }
     }
   }
 
   // scalafmt: { maxColumn = 400, optIn.configStyleArguments = false }
-  def encodeCaseClass[A](schema: Schema.Record[A], config: CirceCodec.Config, discriminatorTuple: DiscriminatorTuple): Encoder[A] = (a: A) => {
-    Json.obj(
-      (discriminatorTuple.map { discriminator =>
-        val (tag, caseTpeName) = discriminator
-        KeyEncoder.encodeKeyString(tag.tag) -> Encoder.encodeString(KeyEncoder.encodeKeyString(caseTpeName))
-      } ++
-        schema.nonTransientFields.map { case s: Schema.Field[A, _] =>
-          val valueEncoder =
-            try {
-              encodeSchema(s.schema, config)
-            } catch {
-              case e: Throwable => throw new RuntimeException(s"Failed to encode field '${s.name}' in $schema'", e)
-            }
-          val value        = s.get(a)
-          val valueJson    = valueEncoder(value)
+  def encodeCaseClass[A](schema: Schema.Record[A], config: CirceCodec.Config, discriminatorTuple: DiscriminatorTuple): Encoder[A] = new Encoder[A] {
+    override def apply(a: A) = {
+      Json.obj(
+        (discriminatorTuple.map { discriminator =>
+          val (tag, caseTpeName) = discriminator
+          KeyEncoder.encodeKeyString(tag.tag) -> Encoder.encodeString(KeyEncoder.encodeKeyString(caseTpeName))
+        } ++
+          schema.nonTransientFields.map { case s: Schema.Field[A, _] =>
+            val valueEncoder =
+              try {
+                encodeSchema(s.schema, config)
+              } catch {
+                case e: Throwable => throw new RuntimeException(s"Failed to encode field '${s.name}' in $schema'", e)
+              }
+            val value        = s.get(a)
+            val valueJson    = valueEncoder(value)
 
-          if (!isEmptyOptionalValue(s, value, config) && (!valueJson.isNull || !config.ignoreNullValues))
-            Some(KeyEncoder.encodeKeyString(s.name) -> valueJson)
-          else None
-        }.flatten).toSeq: _*,
-    )
+            if (!isEmptyOptionalValue(s, value, config) && (!valueJson.isNull || !config.ignoreNullValues))
+              Some(KeyEncoder.encodeKeyString(s.name) -> valueJson)
+            else None
+          }.flatten).toSeq: _*,
+      )
+    }
   }
 
-  def decodeCaseClass0[Z](schema: Schema.CaseClass0[Z], @unused discriminator: Int): Decoder[Z] = (c: HCursor) => {
-    val rejectExtraFields = schema.annotations.collectFirst { case _: rejectExtraFields => () }.isDefined
+  def decodeCaseClass0[Z](schema: Schema.CaseClass0[Z]): Decoder[Z] = new Decoder[Z] {
+    override def apply(c: HCursor) = {
+      val rejectExtraFields = schema.annotations.collectFirst { case _: rejectExtraFields => () }.isDefined
 
-    if (rejectExtraFields) Left(DecodingFailure("Extra fields found", c.history))
-    else Right(schema.defaultConstruct())
+      if (rejectExtraFields) Left(DecodingFailure("Extra fields found", c.history))
+      else Right(schema.defaultConstruct())
+    }
   }
 
   def decodeCaseClass1[A, Z](schema: Schema.CaseClass1[A, Z], discriminator: Int): Decoder[Z] = {
@@ -1007,64 +1031,66 @@ private[circe] trait Codecs {
     }
   }
 
-  private def decodeFields[Z](caseClassSchema: Schema.Record[Z], discriminator: Int): Decoder[Array[Any]] = (c: HCursor) => {
-    val fields            = caseClassSchema.fields
-    val buffer            = Array.ofDim[Any](fields.length)
-    val fieldNames        = fields.map(_.name.asInstanceOf[String]).toArray
-    val schemas           = fields.map(_.schema).toArray
-    val fieldAliases      = fields.flatMap { case Schema.Field(name, _, annotations, _, _, _) =>
-      val aliases = annotations.collectFirst { case a: fieldNameAliases => a.aliases }.getOrElse(Nil)
-      aliases.map(_ -> fieldNames.indexOf(name)) :+ (name -> fieldNames.indexOf(name))
-    }.toMap
-    val rejectExtraFields = caseClassSchema.annotations.collectFirst { case _: rejectExtraFields => () }.isDefined
+  private def decodeFields[Z](caseClassSchema: Schema.Record[Z], discriminator: Int): Decoder[Array[Any]] = new Decoder[Array[Any]] {
+    override def apply(c: HCursor) = {
+      val fields            = caseClassSchema.fields
+      val buffer            = Array.ofDim[Any](fields.length)
+      val fieldNames        = fields.map(_.name.asInstanceOf[String]).toArray
+      val schemas           = fields.map(_.schema).toArray
+      val fieldAliases      = fields.flatMap { case Schema.Field(name, _, annotations, _, _, _) =>
+        val aliases = annotations.collectFirst { case a: fieldNameAliases => a.aliases }.getOrElse(Nil)
+        aliases.map(_ -> fieldNames.indexOf(name)) :+ (name -> fieldNames.indexOf(name))
+      }.toMap
+      val rejectExtraFields = caseClassSchema.annotations.collectFirst { case _: rejectExtraFields => () }.isDefined
 
-    c.keys match {
-      case None       => Left(DecodingFailure("No fields found", c.history))
-      case Some(keys) =>
-        try {
-          var i = 0
-          keys.foreach { key =>
-            fieldAliases.getOrElse(key, -1) match {
-              case -1  =>
-                if (i != discriminator && rejectExtraFields)
-                  throw DecodingFailure(s"Extra field: $key", c.history)
-              case idx =>
-                if (buffer(idx) != null) throw DecodingFailure(s"Duplicate field: $key", c.history)
-                else
-                  c.get(key)(decodeSchema(schemas(idx))) match {
-                    case Left(value)  => throw DecodingFailure(s"Failed to decode field: $key", c.history)
-                    case Right(value) => buffer(idx) = value
-                  }
+      c.keys match {
+        case None       => Left(DecodingFailure("No fields found", c.history))
+        case Some(keys) =>
+          try {
+            var i = 0
+            keys.foreach { key =>
+              fieldAliases.getOrElse(key, -1) match {
+                case -1  =>
+                  if (i != discriminator && rejectExtraFields)
+                    throw DecodingFailure(s"Extra field: $key", c.history)
+                case idx =>
+                  if (buffer(idx) != null) throw DecodingFailure(s"Duplicate field: $key", c.history)
+                  else
+                    c.get(key)(decodeSchema(schemas(idx))) match {
+                      case Left(value)  => throw DecodingFailure(s"Failed to decode field: $key", c.history)
+                      case Right(value) => buffer(idx) = value
+                    }
+              }
+              i += 1
             }
-            i += 1
-          }
 
-          i = 0
-          while (i < fields.length) {
-            if (buffer(i) == null) {
-              if ((fields(i).optional || fields(i).transient) && fields(i).defaultValue.isDefined) {
-                buffer(i) = fields(i).defaultValue.get
-              } else {
-                val schema = fields(i).schema match {
-                  case l @ Schema.Lazy(_) => l.schema
-                  case _                  => schemas(i)
-                }
+            i = 0
+            while (i < fields.length) {
+              if (buffer(i) == null) {
+                if ((fields(i).optional || fields(i).transient) && fields(i).defaultValue.isDefined) {
+                  buffer(i) = fields(i).defaultValue.get
+                } else {
+                  val schema = fields(i).schema match {
+                    case l @ Schema.Lazy(_) => l.schema
+                    case _                  => schemas(i)
+                  }
 
-                schema match {
-                  case collection: Schema.Collection[_, _] => buffer(i) = collection.empty
-                  case _: Schema.Optional[_]               => buffer(i) = None
-                  case _                                   =>
-                    throw DecodingFailure(s"Failed to decode field: ${fields(i).name}", c.history)
+                  schema match {
+                    case collection: Schema.Collection[_, _] => buffer(i) = collection.empty
+                    case _: Schema.Optional[_]               => buffer(i) = None
+                    case _                                   =>
+                      throw DecodingFailure(s"Failed to decode field: ${fields(i).name}", c.history)
+                  }
                 }
               }
+              i += 1
             }
-            i += 1
-          }
 
-          Right(buffer)
-        } catch {
-          case e: DecodingFailure => Left(e)
-        }
+            Right(buffer)
+          } catch {
+            case e: DecodingFailure => Left(e)
+          }
+      }
     }
   }
 }

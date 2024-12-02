@@ -159,11 +159,11 @@ package object circe {
         }
       }
     def onString(value: String): DynamicValue       = DynamicValue.Primitive(value, StandardType.StringType)
-    def onArray(values: Vector[Json]): DynamicValue = DynamicValue.Sequence(Chunk.from(values.map(fromJson)))
+    def onArray(values: Vector[Json]): DynamicValue = DynamicValue.Sequence(Chunk.fromIterable(values.map(fromJson)))
     def onObject(obj: JsonObject): DynamicValue     =
       DynamicValue.Record(
         TypeId.Structural,
-        ListMap.from(obj.toMap.map { case (k, v) => (k, fromJson(v)) }),
+        ListMap(obj.toMap.map { case (k, v) => (k, fromJson(v)) }.toList: _*),
       )
   }
 
