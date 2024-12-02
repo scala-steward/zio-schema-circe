@@ -61,11 +61,16 @@ jobs:
     needs: [build,lint]
     if: github.event_name != 'pull_request'
     steps:
-      - uses: actions/checkout@v3.0.0
+      - name: Checkout current branch
+        uses: actions/checkout@v3.0.0
         with:
           fetch-depth: 0
-      - uses: olafurpg/setup-scala@v13
-      - run: sbt ci-release
+      - name: Setup Scala and Java
+        uses: olafurpg/setup-scala@v13
+        with:
+          java-version: adopt@1.1
+      - name: Lint code
+        run: sbt ci-release
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
           PGP_SECRET: ${{ secrets.PGP_SECRET }}

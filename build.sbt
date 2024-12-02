@@ -4,8 +4,10 @@ lazy val binCompatVersionToCompare = None
 
 inThisBuild(
   List(
-    licenses   := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
-    developers := List(
+    organization := "com.github.jirihausner",
+    homepage     := Some(url("https://github.com/jirihausner/zio-schema-circe")),
+    licenses     := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
+    developers   := List(
       Developer(
         "jirihausner",
         "Jiri Hausner",
@@ -15,6 +17,9 @@ inThisBuild(
     ),
   ),
 )
+
+ThisBuild / sonatypeCredentialHost := "s01.oss.sonatype.org"
+sonatypeRepository                 := "https://s01.oss.sonatype.org/service/local"
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
