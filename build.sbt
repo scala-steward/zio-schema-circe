@@ -1,16 +1,12 @@
 import sbt.Def
-import Dependencies._
-import MimaSettings.mimaSettings
+import BuildHelper._
 
 import scala.scalanative.build.{GC, Mode}
 import scala.scalanative.sbtplugin.ScalaNativePlugin.autoImport.nativeConfig
 
 lazy val binCompatVersionToCompare = None
 
-enablePlugins(ZioSbtEcosystemPlugin, ZioSbtCiPlugin)
-
-lazy val Scala213 = "2.13.15"
-lazy val Scala3   = "3.5.2"
+enablePlugins(ZioSbtEcosystemPlugin)
 
 inThisBuild(
   List(
@@ -20,13 +16,11 @@ inThisBuild(
     scala213                 := Scala213,
     scala3                   := Scala3,
     crossScalaVersions       := List(scala213.value, scala3.value),
-    ciEnabledBranches        := Seq("master"),
     useCoursier              := false,
     Test / parallelExecution := false,
     Test / fork              := true,
     run / fork               := true,
     licenses                 := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
-    ciJvmOptions ++= Seq("-Xms6G", "-Xmx6G", "-Xss4M", "-XX:+UseG1GC"),
     scalafixDependencies ++= List(
       "com.github.vovapolu"                      %% "scaluzzi" % "0.1.23",
       "io.github.ghostbuster91.scalafix-unified" %% "unified"  % "0.0.9",
@@ -117,6 +111,17 @@ def compilerOptions(scalaVersion: String, optimize: Boolean) = {
         "-Ymacro-annotations",
         "-Ywarn-macros:after",
       ) ++ std2xOptions ++ optimizerOptions
+      case Some((2, 12)) =>
+        Seq(
+          "-Ypartial-unification",
+          "-opt-warnings",
+          "-Ywarn-extra-implicit",
+          "-Yno-adapted-args",
+          "-Ywarn-inaccessible",
+          "-Ywarn-nullary-override",
+          "-Ywarn-nullary-unit",
+          "-Wconf:cat=unused-nowarn:s"
+        ) ++ std2xOptions ++ optimizerOptions
     case _             => Seq.empty
   }
 
@@ -161,6 +166,10 @@ def stdSettings(projectName: String) = Seq(
   scalacOptions ++= compilerOptions(scalaVersion.value, optimize = !isSnapshot.value),
   libraryDependencies ++= {
     CrossVersion.partialVersion(scalaVersion.value) match {
+      case Some((2, x)) if x <= 12 =>
+        Seq(
+          compilerPlugin(("org.scalamacros" % "paradise" % "2.1.1").cross(CrossVersion.full))
+        )
       case Some((2, _)) =>
         Seq(
           compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.3").cross(CrossVersion.full)),
