@@ -189,14 +189,19 @@ object BuildHelper {
       scalacOptions ++= compilerOptions(scalaVersion.value, optimize = !isSnapshot.value),
       libraryDependencies ++= {
         CrossVersion.partialVersion(scalaVersion.value) match {
-          case Some((2, x)) if x <= 12 =>
-            Seq(
-              compilerPlugin(("org.scalamacros" % "paradise" % "2.1.1").cross(CrossVersion.full)),
-            )
-          case Some((2, _))            =>
+          case Some((2, _)) =>
             Seq(
               compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.3").cross(CrossVersion.full)),
               compilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
+            )
+          case _            => List.empty
+        }
+      },
+      libraryDependencies ++= {
+        CrossVersion.partialVersion(scalaVersion.value) match {
+          case Some((2, x)) if x <= 12 =>
+            Seq(
+              compilerPlugin(("org.scalamacros" % "paradise" % "2.1.1").cross(CrossVersion.full)),
             )
           case _                       => List.empty
         }

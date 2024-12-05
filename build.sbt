@@ -69,6 +69,8 @@ lazy val zioSchemaCirce =
         "io.circe" %%% "circe-generic"         % Versions.circe     % Test,
         "io.circe" %%% "circe-parser"          % Versions.circe,
         "dev.zio"  %%% "zio"                   % Versions.zio,
+        "dev.zio"  %%% "zio-test"              % Versions.zio       % Test,
+        "dev.zio"  %%% "zio-test-sbt"          % Versions.zio       % Test,
         "dev.zio"  %%% "zio-streams"           % Versions.zio,
         "dev.zio"  %%% "zio-schema"            % Versions.zioSchema,
         "dev.zio"  %%% "zio-schema-derivation" % Versions.zioSchema % Test,
@@ -78,7 +80,6 @@ lazy val zioSchemaCirce =
     .settings(macroDefinitionSettings)
     .settings(crossProjectSettings)
     .settings(Test / fork := crossProjectPlatform.value == JVMPlatform)
-    .nativeSettings(Test / fork := false)
     .nativeSettings(
       libraryDependencies ++= Seq(
         "io.github.cquiroz" %%% "scala-java-time" % Versions.scalaJavaTime,
