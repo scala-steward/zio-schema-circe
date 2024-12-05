@@ -1,11 +1,15 @@
 import BuildHelper._
+import xerial.sbt.Sonatype.sonatypeCentralHost
 
 lazy val binCompatVersionToCompare = None
 
 inThisBuild(
   List(
-    organization := "com.github.jirihausner",
+    organization := "io.github.jirihausner",
     homepage     := Some(url("https://github.com/jirihausner/zio-schema-circe")),
+    scmInfo      := Some(
+      ScmInfo(url("https://github.com/jirihausner/zio-schema-circe"), "git@github.com:jirihausner/zio-schema-circe.git"),
+    ),
     licenses     := List("Apache-2.0" -> url("http://www.apache.org/licenses/LICENSE-2.0")),
     developers   := List(
       Developer(
@@ -18,7 +22,7 @@ inThisBuild(
   ),
 )
 
-ThisBuild / sonatypeCredentialHost := "s01.oss.sonatype.org"
+ThisBuild / sonatypeCredentialHost := sonatypeCentralHost
 sonatypeRepository                 := "https://s01.oss.sonatype.org/service/local"
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
