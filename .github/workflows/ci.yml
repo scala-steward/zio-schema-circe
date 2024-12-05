@@ -69,7 +69,7 @@ jobs:
         uses: olafurpg/setup-scala@v13
         with:
           java-version: adopt@1.1
-      - name: Lint code
+      - name: Release
         run: sbt ci-release
         env:
           PGP_PASSPHRASE: ${{ secrets.PGP_PASSPHRASE }}
