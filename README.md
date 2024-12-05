@@ -2,6 +2,8 @@
 
 `zio-schema-circe` seamlessly integrates [zio-schema](https://github.com/zio/zio-schema) with the widely used [Circe](https://circe.github.io/circe/) JSON library.
 
+![CI Badge](https://github.com/jirihausner/zio-schema-circe/workflows/CI/badge.svg) ![Maven Central Version](https://img.shields.io/maven-central/v/io.github.jirihausner/zio-schema-circe_2.13) [![ZIO Schema Circe](https://img.shields.io/github/stars/jirihausner/zio-schema-circe?style=social)](https://github.com/jirihausner/zio-schema-circe)
+
 ## Why zio-schema-circe?
 
 - Perfect for projects that already use Circe that want to take advantage of the type-safe schema definitions of `zio-schema`.
@@ -10,7 +12,12 @@
 
 ## Installation
 
-TODO
+In order to use this library, we need to add one (or more) of the following lines in our `build.sbt` file:
+
+```scala
+libraryDependencies += "io.github.jirihausner" %% "zio-schema-circe"          % "0.1.0"
+libraryDependencies += "io.github.jirihausner" %% "zio-schema-circe-jsoniter" % "0.1.0"
+```
 
 ## Example
 
