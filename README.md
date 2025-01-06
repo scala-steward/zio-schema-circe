@@ -7,7 +7,7 @@
 ## Why zio-schema-circe?
 
 - Perfect for projects that already use Circe that want to take advantage of the type-safe schema definitions of `zio-schema`.
-- Provides an alternative to [zio-schema-json](https://github.com/zio/zio-schema/tree/master/zio-schema-json), catering to teams already invested in Circe's ecosystem.
+- Provides an alternative to [zio-schema-json](https://github.com/zio/zio-schema/tree/main/zio-schema-json), catering to teams already invested in Circe's ecosystem.
 - Makes it easier to gradually migrate to `zio-schema` or incorporate its features into legacy stacks.
 
 ## Installation
@@ -34,8 +34,8 @@ object Person {
     implicit val schema: Schema[Person] = DeriveSchema.gen
 }
 
-// derive Circe codes from Schema
-implicit val codec: Codec[Person] = CirceCodec.schemaCodec(schema)
+// derive Circe codecs from Schema
+implicit val codec: Codec[Person] = CirceCodec.schemaCodec(Person.schema)
 
 decode[Person]("""{"name": "John", "age": 30}""") // Person("John", 30)
 Person("Adam", 24).asJson.noSpaces                // {"Adam": 24}
@@ -54,7 +54,7 @@ schemaBasedBinaryCodec[Person](CirceCodec.Config.default) // zio.schema.codec.Bi
 
 ## Acknowledgements
 
-This library was heavily inspired by [zio-schema-json](https://github.com/zio/zio-schema/tree/master/zio-schema-json). Huge thanks to its original contributors for laying foundational ideas and implementation, which greatly influenced `zio-schema-circe`.
+This library was heavily inspired by [zio-schema-json](https://github.com/zio/zio-schema/tree/main/zio-schema-json). Huge thanks to its original contributors for laying foundational ideas and implementation, which greatly influenced `zio-schema-circe`.
 
 ## Disclaimer
 
