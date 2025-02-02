@@ -1,4 +1,5 @@
 import BuildHelper._
+import com.typesafe.tools.mima.plugin.MimaKeys.mimaPreviousArtifacts
 import xerial.sbt.Sonatype.sonatypeCentralHost
 
 lazy val binCompatVersionToCompare = None
@@ -44,8 +45,9 @@ addCommandAlias("mimaCheck", "+zioSchemaCirce/mimaReportBinaryIssues")
 lazy val root = project
   .in(file("."))
   .settings(
-    name           := "zio-schema-circe",
-    publish / skip := true,
+    name                  := "zio-schema-circe",
+    publish / skip        := true,
+    mimaPreviousArtifacts := Set.empty,
   )
   .aggregate(
     zioSchemaCirce.jvm,
