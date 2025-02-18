@@ -120,7 +120,7 @@ protected[circe] object Data {
     query: String,
     page: Int,
     size: Int,
-    @transientField nextPage: String = "",
+    @transientField nextPage: String = "transient",
   )
 
   val searchRequestWithTransientFieldSchema: Schema[SearchRequestWithTransientField] =
@@ -161,6 +161,25 @@ protected[circe] object Data {
         Schema.Primitive(StandardType.IntType).optional,
         get0 = (p: ListMap[String, _]) => p("bar").asInstanceOf[Option[Int]],
         set0 = (p: ListMap[String, _], v: Option[Int]) => p.updated("bar", v),
+      ),
+  )
+
+  val recordWithTransientSchema: Schema[ListMap[String, _]] = Schema.record(
+    TypeId.Structural,
+    Schema.Field(
+      "foo",
+      Schema.Primitive(StandardType.StringType),
+      annotations0 = Chunk(transientField()),
+      get0 = (p: ListMap[String, _]) => p("foo").asInstanceOf[String],
+      set0 = (p: ListMap[String, _], v: String) => p.updated("foo", v),
+    ),
+    Schema
+      .Field(
+        "bar",
+        Schema.Primitive(StandardType.IntType),
+        annotations0 = Chunk(transientField()),
+        get0 = (p: ListMap[String, _]) => p("bar").asInstanceOf[Int],
+        set0 = (p: ListMap[String, _], v: Int) => p.updated("bar", v),
       ),
   )
 
@@ -208,10 +227,10 @@ protected[circe] object Data {
 
   @discriminatorName("_type")
   sealed trait OneOf2
-  case class StringValue2(value: String)                       extends OneOf2
-  case class IntValue2(value: Int)                             extends OneOf2
-  case class BooleanValue2(value: Boolean)                     extends OneOf2
-  case class StringValue2Multi(value1: String, value2: String) extends OneOf2
+  case class StringValue2(value: String)                               extends OneOf2
+  case class IntValue2(value: Int)                                     extends OneOf2
+  case class BooleanValue2(value: Boolean)                             extends OneOf2
+  case class `StringValue2-Backticked`(value1: String, value2: String) extends OneOf2
 
   case class Enumeration2(oneOf: OneOf2)
 
@@ -221,11 +240,11 @@ protected[circe] object Data {
 
   @noDiscriminator
   sealed trait OneOf3
-  case class StringValue3(value: String)                       extends OneOf3
-  case class IntValue3(value: Int)                             extends OneOf3
-  case class BooleanValue3(value: Boolean)                     extends OneOf3
-  case class StringValue3Multi(value1: String, value2: String) extends OneOf3
-  case class Nested(oneOf: OneOf3)                             extends OneOf3
+  case class StringValue3(value: String)                               extends OneOf3
+  case class IntValue3(value: Int)                                     extends OneOf3
+  case class BooleanValue3(value: Boolean)                             extends OneOf3
+  case class `StringValue3-Backticked`(value1: String, value2: String) extends OneOf3
+  case class Nested(oneOf: OneOf3)                                     extends OneOf3
 
   case class Enumeration3(oneOf: OneOf3)
 
@@ -301,6 +320,7 @@ protected[circe] object Data {
   object Order {
     implicit lazy val schema: Schema[Order] = DeriveSchema.gen[Order]
   }
+
   @noDiscriminator sealed trait Prompt
 
   object Prompt {
@@ -380,6 +400,39 @@ protected[circe] object Data {
   object AllOptionalFields {
     implicit lazy val schema: Schema[AllOptionalFields] = DeriveSchema.gen[AllOptionalFields]
   }
+
+  @discriminatorName("type")
+  sealed trait OneOf4
+
+  object OneOf4 {
+    implicit val schema: Schema[OneOf4] = DeriveSchema.gen
+  }
+
+  @rejectExtraFields case class RecordExampleWithDiscriminator(
+    @fieldName("$f1") f1: Option[String], // the only field that does not have a default value
+    @fieldNameAliases("field2") f2: Option[String] = None,
+    @transientField f3: Option[String] = None,
+    f4: Option[String] = None,
+    f5: Option[String] = None,
+    f6: Option[String] = None,
+    f7: Option[String] = None,
+    f8: Option[String] = None,
+    f9: Option[String] = None,
+    f10: Option[String] = None,
+    f11: Option[String] = None,
+    f12: Option[String] = None,
+    f13: Option[String] = None,
+    f14: Option[String] = None,
+    f15: Option[String] = None,
+    f16: Option[String] = None,
+    f17: Option[String] = None,
+    f18: Option[String] = None,
+    f19: Option[String] = None,
+    f20: Option[String] = None,
+    f21: Option[String] = None,
+    f22: Option[String] = None,
+    @fieldName("$f23") f23: Option[String] = None,
+  ) extends OneOf4
 
   case class RecordExample(
     @fieldName("$f1") f1: Option[String], // the only field that does not have a default value
@@ -497,5 +550,255 @@ protected[circe] object Data {
     case class Case23(value: String) extends Enum23Cases
 
     implicit lazy val schema: Schema[Enum23Cases] = DeriveSchema.gen[Enum23Cases]
+  }
+
+  case class Recursive(n: Option[Recursive] = None)
+
+  object Recursive {
+    implicit val schema: Schema[Recursive] = DeriveSchema.gen
+  }
+
+  sealed trait BigEnum2
+
+  object BigEnum2 {
+
+    @caseName("Case_00")
+    @caseNameAliases("Case-00")
+    case class Case00(b: Byte) extends BigEnum2
+    case object Case01         extends BigEnum2
+    case object Case02         extends BigEnum2
+    case object Case03         extends BigEnum2
+    case object Case04         extends BigEnum2
+    case object Case05         extends BigEnum2
+    case object Case06         extends BigEnum2
+    case object Case07         extends BigEnum2
+    case object Case08         extends BigEnum2
+    case object Case09         extends BigEnum2
+    case object Case10         extends BigEnum2
+    case object Case11         extends BigEnum2
+    case object Case12         extends BigEnum2
+    case object Case13         extends BigEnum2
+    case object Case14         extends BigEnum2
+    case object Case15         extends BigEnum2
+    case object Case16         extends BigEnum2
+    case object Case17         extends BigEnum2
+    case object Case18         extends BigEnum2
+    case object Case19         extends BigEnum2
+    case object Case20         extends BigEnum2
+    case object Case21         extends BigEnum2
+    case object Case22         extends BigEnum2
+    case object Case23         extends BigEnum2
+    case object Case24         extends BigEnum2
+    case object Case25         extends BigEnum2
+    case object Case26         extends BigEnum2
+    case object Case27         extends BigEnum2
+    case object Case28         extends BigEnum2
+    case object Case29         extends BigEnum2
+    case object Case30         extends BigEnum2
+    case object Case31         extends BigEnum2
+    case object Case32         extends BigEnum2
+    case object Case33         extends BigEnum2
+    case object Case34         extends BigEnum2
+    case object Case35         extends BigEnum2
+    case object Case36         extends BigEnum2
+    case object Case37         extends BigEnum2
+    case object Case38         extends BigEnum2
+    case object Case39         extends BigEnum2
+    case object Case40         extends BigEnum2
+    case object Case41         extends BigEnum2
+    case object Case42         extends BigEnum2
+    case object Case43         extends BigEnum2
+    case object Case44         extends BigEnum2
+    case object Case45         extends BigEnum2
+    case object Case46         extends BigEnum2
+    case object Case47         extends BigEnum2
+    case object Case48         extends BigEnum2
+    case object Case49         extends BigEnum2
+    case object Case50         extends BigEnum2
+    case object Case51         extends BigEnum2
+    case object Case52         extends BigEnum2
+    case object Case53         extends BigEnum2
+    case object Case54         extends BigEnum2
+    case object Case55         extends BigEnum2
+    case object Case56         extends BigEnum2
+    case object Case57         extends BigEnum2
+    case object Case58         extends BigEnum2
+    case object Case59         extends BigEnum2
+    case object Case60         extends BigEnum2
+    case object Case61         extends BigEnum2
+    case object Case62         extends BigEnum2
+    case object Case63         extends BigEnum2
+    case object Case64         extends BigEnum2
+    case object Case65         extends BigEnum2
+    case object Case66         extends BigEnum2
+    case object Case67         extends BigEnum2
+    case object Case68         extends BigEnum2
+    case object Case69         extends BigEnum2
+
+    implicit val schema: Schema[BigEnum2] = DeriveSchema.gen
+  }
+
+  @discriminatorName("type")
+  sealed trait BigEnum3
+
+  object BigEnum3 {
+
+    @caseName("Case_00")
+    @caseNameAliases("Case-00")
+    case class Case00(b: Byte) extends BigEnum3
+    case object Case01         extends BigEnum3
+    case object Case02         extends BigEnum3
+    case object Case03         extends BigEnum3
+    case object Case04         extends BigEnum3
+    case object Case05         extends BigEnum3
+    case object Case06         extends BigEnum3
+    case object Case07         extends BigEnum3
+    case object Case08         extends BigEnum3
+    case object Case09         extends BigEnum3
+    case object Case10         extends BigEnum3
+    case object Case11         extends BigEnum3
+    case object Case12         extends BigEnum3
+    case object Case13         extends BigEnum3
+    case object Case14         extends BigEnum3
+    case object Case15         extends BigEnum3
+    case object Case16         extends BigEnum3
+    case object Case17         extends BigEnum3
+    case object Case18         extends BigEnum3
+    case object Case19         extends BigEnum3
+    case object Case20         extends BigEnum3
+    case object Case21         extends BigEnum3
+    case object Case22         extends BigEnum3
+    case object Case23         extends BigEnum3
+    case object Case24         extends BigEnum3
+    case object Case25         extends BigEnum3
+    case object Case26         extends BigEnum3
+    case object Case27         extends BigEnum3
+    case object Case28         extends BigEnum3
+    case object Case29         extends BigEnum3
+    case object Case30         extends BigEnum3
+    case object Case31         extends BigEnum3
+    case object Case32         extends BigEnum3
+    case object Case33         extends BigEnum3
+    case object Case34         extends BigEnum3
+    case object Case35         extends BigEnum3
+    case object Case36         extends BigEnum3
+    case object Case37         extends BigEnum3
+    case object Case38         extends BigEnum3
+    case object Case39         extends BigEnum3
+    case object Case40         extends BigEnum3
+    case object Case41         extends BigEnum3
+    case object Case42         extends BigEnum3
+    case object Case43         extends BigEnum3
+    case object Case44         extends BigEnum3
+    case object Case45         extends BigEnum3
+    case object Case46         extends BigEnum3
+    case object Case47         extends BigEnum3
+    case object Case48         extends BigEnum3
+    case object Case49         extends BigEnum3
+    case object Case50         extends BigEnum3
+    case object Case51         extends BigEnum3
+    case object Case52         extends BigEnum3
+    case object Case53         extends BigEnum3
+    case object Case54         extends BigEnum3
+    case object Case55         extends BigEnum3
+    case object Case56         extends BigEnum3
+    case object Case57         extends BigEnum3
+    case object Case58         extends BigEnum3
+    case object Case59         extends BigEnum3
+    case object Case60         extends BigEnum3
+    case object Case61         extends BigEnum3
+    case object Case62         extends BigEnum3
+    case object Case63         extends BigEnum3
+    case object Case64         extends BigEnum3
+    case object Case65         extends BigEnum3
+    case object Case66         extends BigEnum3
+    case object Case67         extends BigEnum3
+    case object Case68         extends BigEnum3
+    case object Case69         extends BigEnum3
+
+    implicit val schema: Schema[BigEnum3] = DeriveSchema.gen
+  }
+
+  case class BigProduct(
+    f00: Boolean,
+    @fieldNameAliases("f-01") f01: Option[Byte] = None,
+    f02: Option[Short] = None,
+    f03: Option[Int] = None,
+    f04: Option[Long] = None,
+    f05: Option[Float] = None,
+    f06: Option[Double] = None,
+    f07: Option[Byte] = None,
+    f08: Option[Byte] = None,
+    f09: Option[Byte] = None,
+    f10: Option[Byte] = None,
+    f11: Option[Byte] = None,
+    f12: Option[Byte] = None,
+    f13: Option[Byte] = None,
+    f14: Option[Byte] = None,
+    f15: Option[Byte] = None,
+    f16: Option[Byte] = None,
+    f17: Option[Byte] = None,
+    f18: Option[Byte] = None,
+    f19: Option[Byte] = None,
+    f20: Option[Byte] = None,
+    f21: Option[Byte] = None,
+    f22: Option[Byte] = None,
+    f23: Option[Byte] = None,
+    f24: Option[Byte] = None,
+    f25: Option[Byte] = None,
+    f26: Option[Byte] = None,
+    f27: Option[Byte] = None,
+    f28: Option[Byte] = None,
+    f29: Option[Byte] = None,
+    f30: Option[Byte] = None,
+    f31: Option[Byte] = None,
+    f32: Option[Byte] = None,
+    f33: Option[Byte] = None,
+    f34: Option[Byte] = None,
+    f35: Option[Byte] = None,
+    f36: Option[Byte] = None,
+    f37: Option[Byte] = None,
+    f38: Option[Byte] = None,
+    f39: Option[Byte] = None,
+    f40: Option[Byte] = None,
+    f41: Option[Byte] = None,
+    f42: Option[Byte] = None,
+    f43: Option[Byte] = None,
+    f44: Option[Byte] = None,
+    f45: Option[Byte] = None,
+    f46: Option[Byte] = None,
+    f47: Option[Byte] = None,
+    f48: Option[Byte] = None,
+    f49: Option[Byte] = None,
+    f50: Option[Byte] = None,
+    f51: Option[Byte] = None,
+    f52: Option[Byte] = None,
+    f53: Option[Byte] = None,
+    f54: Option[Byte] = None,
+    f55: Option[Byte] = None,
+    f56: Option[Byte] = None,
+    f57: Option[Byte] = None,
+    f58: Option[Byte] = None,
+    f59: Option[Byte] = None,
+    f60: Option[Byte] = None,
+    f61: Option[Byte] = None,
+    f62: Option[Byte] = None,
+    f63: Option[Byte] = None,
+    f64: Option[Byte] = None,
+    f65: Option[Byte] = None,
+    f66: Option[Byte] = None,
+    f67: Option[BigProduct],
+    f68: List[Byte],
+    f69: Vector[Byte],
+  )
+
+  object BigProduct {
+    implicit val schema: Schema[BigProduct] = DeriveSchema.gen
+  }
+
+  case class BacktickedFieldName(`x-api-key`: String)
+
+  object BacktickedFieldName {
+    implicit val schema: Schema[BacktickedFieldName] = DeriveSchema.gen
   }
 }
