@@ -1,5 +1,4 @@
 import com.typesafe.tools.mima.core._
-import com.typesafe.tools.mima.core.ProblemFilters._
 import com.typesafe.tools.mima.plugin.MimaKeys._
 import org.snakeyaml.engine.v2.api.{Load, LoadSettings}
 import sbt._
@@ -28,7 +27,7 @@ object BuildHelper {
 
   val Scala212: String = versions("2.12")
   val Scala213: String = versions("2.13")
-  val Scala3: String   = versions("3.5")
+  val Scala3: String   = versions("3.3")
 
   object Versions {
 
@@ -36,8 +35,8 @@ object BuildHelper {
     val circeDerivation = "0.13.0-M5"
     val jsoniter        = "2.33.3"
     val scalaJavaTime   = "2.6.0"
-    val zio             = "2.1.16"
-    val zioSchema       = "1.6.6"
+    val zio             = "2.1.18"
+    val zioSchema       = "1.7.0"
   }
 
   def compilerOptions(scalaVersion: String, optimize: Boolean) = {
@@ -48,6 +47,7 @@ object BuildHelper {
       "-feature",
       "-unchecked",
       "-language:existentials",
+      "-language:implicitConversions",
     ) ++ {
       if (sys.env.contains("CI")) {
         Seq("-Xfatal-warnings")
@@ -78,7 +78,6 @@ object BuildHelper {
     val extraOptions = CrossVersion.partialVersion(scalaVersion) match {
       case Some((3, _))  =>
         Seq(
-          "-language:implicitConversions",
           "-Xignore-scala2-macros",
           "-Xkind-projector",
         )
@@ -92,13 +91,15 @@ object BuildHelper {
         ) ++ std2xOptions ++ optimizerOptions
       case Some((2, 12)) =>
         Seq(
-          "-Ypartial-unification",
           "-opt-warnings",
-          "-Ywarn-extra-implicit",
           "-Yno-adapted-args",
+          "-Ypartial-unification",
+          "-Ywarn-extra-implicit",
           "-Ywarn-inaccessible",
           "-Ywarn-nullary-override",
           "-Ywarn-nullary-unit",
+          "-Ywarn-unused-import",
+          "-Wconf:cat=deprecation:silent",
           "-Wconf:cat=unused-nowarn:s",
         ) ++ std2xOptions ++ optimizerOptions
       case _             => Seq.empty
@@ -225,6 +226,19 @@ object BuildHelper {
       mimaPreviousArtifacts         := previousStableVersion.value.map(organization.value %% name.value % _).toSet,
       mimaCheckDirection            := "backward",
       mimaFailOnProblem             := true,
+      mimaBinaryIssueFilters ++= Seq(
+        ProblemFilters.exclude[Problem]("zio.schema.codec.circe.internal.*"),
+        ProblemFilters.exclude[DirectMissingMethodProblem]("zio.schema.codec.circe.CirceCodec.schemaDecoder"),
+        ProblemFilters.exclude[DirectMissingMethodProblem](
+          "zio.schema.codec.circe.jsoniter.CirceJsoniterCodec.schemaEncoder",
+        ),
+        ProblemFilters.exclude[DirectMissingMethodProblem](
+          "zio.schema.codec.circe.jsoniter.CirceJsoniterCodec.schemaDecoder",
+        ),
+        ProblemFilters.exclude[DirectMissingMethodProblem](
+          "zio.schema.codec.circe.jsoniter.CirceJsoniterCodec.schemaCodec",
+        ),
+      ),
     )
 
   def mimaSettings(binCompatVersionToCompare: Option[String], failOnProblem: Boolean): Seq[Def.Setting[?]] =

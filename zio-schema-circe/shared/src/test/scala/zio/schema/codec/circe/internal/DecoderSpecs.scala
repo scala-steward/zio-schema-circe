@@ -7,6 +7,7 @@ import zio.schema.annotation._
 import zio.schema.codec.DecodeError
 import zio.schema.codec.DecodeError.ReadError
 import zio.schema.codec.circe.CirceCodec.CirceEncoder.charSequenceToByteChunk
+import zio.schema.codec.circe.CirceCodec.Configuration
 import zio.schema.codec.circe.internal.Data._
 import zio.stream.ZStream
 import zio.test.Assertion._
@@ -16,20 +17,17 @@ import zio.{Cause, Chunk, Console, ZIO}
 
 import scala.collection.immutable.ListMap
 
-private[circe] trait DecoderSpecs {
+private[circe] trait DecoderSpecs extends StringUtils {
 
-  type Config
+  protected def StreamingConfig: Configuration // should keep empty collections and treat streams as arrays
 
-  protected def DefaultConfig: Config
-  protected def StreamingConfig: Config // should keep empty collections and treat streams as arrays
-
-  protected def BinaryCodec[A]: (Schema[A], Config) => codec.BinaryCodec[A]
+  protected def BinaryCodec[A]: (Schema[A], Configuration) => codec.BinaryCodec[A]
 
   final protected def assertDecodesToError[A](
     schema: Schema[A],
     json: CharSequence,
     error: Exception,
-    config: Config = DefaultConfig,
+    config: Configuration = Configuration.default,
     debug: Boolean = false,
   ): ZIO[Any, Nothing, TestResult] = {
     val stream = ZStream
@@ -49,7 +47,7 @@ private[circe] trait DecoderSpecs {
     schema: Schema[A],
     json: CharSequence,
     value: A,
-    config: Config = DefaultConfig,
+    config: Configuration = Configuration.default,
     debug: Boolean = false,
   ): ZIO[Any, DecodeError, TestResult] = {
     val result = ZStream
@@ -69,7 +67,7 @@ private[circe] trait DecoderSpecs {
     schema: Schema[A],
     json: CharSequence,
     values: Chunk[A],
-    config: Config = DefaultConfig,
+    config: Configuration = Configuration.default,
     debug: Boolean = false,
   ): ZIO[Any, DecodeError, TestResult] = {
     val result = ZStream
@@ -1113,11 +1111,11 @@ private[circe] trait DecoderSpecs {
           assertDecodesMany(Schema[Int], "1 2 3 4 5", Chunk.fromIterable(1 to 5))
         },
         test("decodes a stream with multiple integers separated by commas and other non JSON number characters") {
-          assertDecodesMany(Schema[Int], "1 2, 3;;; 4x5", Chunk.fromIterable(1 to 5), debug = true)
-        } @@ ignore, // FIXME: fails but should work
+          assertDecodesMany(Schema[Int], "1 2, 3;;; 4x5", Chunk.fromIterable(1 to 5))
+        },
         test("decodes a stream with multiple integers encoded as an array") {
-          assertDecodesMany(Schema[Int], "[1,2,3,4,5]", Chunk.fromIterable(1 to 5), StreamingConfig, debug = true)
-        } @@ ignore, // FIXME: fails but should work
+          assertDecodesMany(Schema[Int], "[1,2,3,4,5]", Chunk.fromIterable(1 to 5), StreamingConfig)
+        },
         test("decodes a stream with multiple integers encoded as an array with additional whitespace") {
           assertDecodesMany(
             Schema[Int],
@@ -1127,9 +1125,8 @@ private[circe] trait DecoderSpecs {
               |4,   5]   """.stripMargin,
             Chunk.fromIterable(1 to 5),
             StreamingConfig,
-            debug = true,
           )
-        } @@ ignore, // FIXME: fails but should work
+        },
       ),
       suite("of booleans")(
         test("decodes a stream with multiple booleans separated by newlines") {

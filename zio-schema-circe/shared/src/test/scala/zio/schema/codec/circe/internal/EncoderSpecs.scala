@@ -4,6 +4,7 @@ import zio.prelude.NonEmptyMap
 import zio.schema._
 import zio.schema.annotation._
 import zio.schema.codec.circe.CirceCodec.CirceEncoder.charSequenceToByteChunk
+import zio.schema.codec.circe.CirceCodec.Configuration
 import zio.schema.codec.circe.internal.Data._
 import zio.stream.ZStream
 import zio.test.Assertion._
@@ -11,25 +12,22 @@ import zio.test.TestAspect.ignore
 import zio.test._
 import zio.{Chunk, Console, ZIO}
 
+import java.math.RoundingMode
 import scala.collection.immutable.ListMap
 
-private[circe] trait EncoderSpecs {
+private[circe] trait EncoderSpecs extends StringUtils {
 
-  type Config
+  protected def IgnoreEmptyCollectionsConfig: Configuration       // should ignore empty collections
+  protected def KeepNullsAndEmptyColleciontsConfig: Configuration // should keep nulls and empty collections
+  protected def StreamingConfig: Configuration // should keep empty collections and treat streams as arrays
 
-  protected def DefaultConfig: Config // should keep empty collections but ignore nulls
-
-  protected def IgnoreEmptyCollectionsConfig: Config       // should ignore empty collections
-  protected def KeepNullsAndEmptyColleciontsConfig: Config // should keep nulls and empty collections
-  protected def StreamingConfig: Config                    // should keep empty collections and treat streams as arrays
-
-  protected def BinaryCodec[A]: (Schema[A], Config) => codec.BinaryCodec[A]
+  protected def BinaryCodec[A]: (Schema[A], Configuration) => codec.BinaryCodec[A]
 
   final protected def assertEncodes[A](
     schema: Schema[A],
     value: A,
     json: CharSequence,
-    config: Config = DefaultConfig,
+    config: Configuration = Configuration.default,
     debug: Boolean = false,
   ): ZIO[Any, Nothing, TestResult] = {
     val stream = ZStream
@@ -43,11 +41,35 @@ private[circe] trait EncoderSpecs {
     assertZIO(stream)(equalTo(charSequenceToByteChunk(json)))
   }
 
+  final protected def assertEncodesNumericToPrecision[A](
+    schema: Schema[A],
+    value: A,
+    precision: java.math.BigDecimal => java.math.BigDecimal,
+    config: Configuration = Configuration.default,
+    debug: Boolean = false,
+  ): ZIO[Any, Nothing, TestResult] = {
+    val json   = precision(new java.math.BigDecimal(value.toString)).stripTrailingZeros.toPlainString
+    val stream = ZStream
+      .succeed(value)
+      .via(BinaryCodec(schema, config).streamEncoder)
+      .runCollect
+      .map { chunk =>
+        charSequenceToByteChunk(
+          precision(new java.math.BigDecimal(new String(chunk.toArray))).stripTrailingZeros.toPlainString,
+        )
+      }
+      .tap { chunk =>
+        (Console.printLine(s"expected: $json") *>
+          Console.printLine(s"got:      ${new String(chunk.toArray)}")).when(debug).ignore
+      }
+    assertZIO(stream)(equalTo(charSequenceToByteChunk(json)))
+  }
+
   final protected def assertEncodesMany[A](
     schema: Schema[A],
     values: Seq[A],
     json: CharSequence,
-    config: Config = DefaultConfig,
+    config: Configuration = Configuration.default,
     debug: Boolean = false,
   ): ZIO[Any, Nothing, TestResult] = {
     val stream = ZStream
@@ -59,6 +81,16 @@ private[circe] trait EncoderSpecs {
           Console.printLine(s"got:      ${new String(chunk.toArray)}")).when(debug).ignore
       }
     assertZIO(stream)(equalTo(charSequenceToByteChunk(json)))
+  }
+
+  protected def testFloat: Spec[Any, Nothing] = test("Float") {
+    check(Gen.float) { float =>
+      assertEncodesNumericToPrecision(
+        Schema.Primitive(StandardType.FloatType),
+        float,
+        _.setScale(7, RoundingMode.HALF_UP),
+      )
+    }
   }
 
   import PaymentMethod.{PayPal, WireTransfer}
@@ -102,14 +134,14 @@ private[circe] trait EncoderSpecs {
           assertEncodes(Schema.Primitive(StandardType.LongType), long, long.toString)
         }
       },
-      test("Float") {
-        check(Gen.float) { float =>
-          assertEncodes(Schema.Primitive(StandardType.FloatType), float, float.toString)
-        }
-      },
+      testFloat,
       test("Double") {
         check(Gen.double) { double =>
-          assertEncodes(Schema.Primitive(StandardType.DoubleType), double, double.toString)
+          assertEncodesNumericToPrecision(
+            Schema.Primitive(StandardType.DoubleType),
+            double,
+            _.setScale(16, RoundingMode.HALF_UP),
+          )
         }
       },
       test("Binary") {
@@ -578,6 +610,7 @@ private[circe] trait EncoderSpecs {
               request.nextPage
                 .map(x => s""","nextPage":${stringify(x)}}""")
                 .getOrElse("""}"""),
+            IgnoreEmptyCollectionsConfig,
           )
         }
       },
@@ -600,6 +633,7 @@ private[circe] trait EncoderSpecs {
           WithOptionFields.schema,
           WithOptionFields(Some("s"), None),
           """{"a":"s"}""",
+          IgnoreEmptyCollectionsConfig,
         )
       },
       test("case class with backticked field name") {
@@ -665,6 +699,7 @@ private[circe] trait EncoderSpecs {
           Subscription.schema,
           Subscription.Unlimited(None),
           """{"type":"unlimited"}""",
+          IgnoreEmptyCollectionsConfig,
         )
       },
       suite("with no discriminator")(
