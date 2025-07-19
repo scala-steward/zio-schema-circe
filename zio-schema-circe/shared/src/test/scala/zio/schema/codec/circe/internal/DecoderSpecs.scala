@@ -6,9 +6,8 @@ import zio.schema._
 import zio.schema.annotation._
 import zio.schema.codec.DecodeError
 import zio.schema.codec.DecodeError.ReadError
-import zio.schema.codec.circe.CirceCodec.CirceEncoder.charSequenceToByteChunk
-import zio.schema.codec.circe.CirceCodec.Configuration
 import zio.schema.codec.circe.internal.Data._
+import zio.schema.codec.circe.internal.{Configuration => InternalConfiguration}
 import zio.stream.ZStream
 import zio.test.Assertion._
 import zio.test.TestAspect.ignore
@@ -19,15 +18,19 @@ import scala.collection.immutable.ListMap
 
 private[circe] trait DecoderSpecs extends StringUtils {
 
-  protected def StreamingConfig: Configuration // should keep empty collections and treat streams as arrays
+  type Config <: InternalConfiguration
 
-  protected def BinaryCodec[A]: (Schema[A], Configuration) => codec.BinaryCodec[A]
+  protected def DefaultConfig: Config // default configuration
+
+  protected def StreamingConfig: Config // should keep empty collections and treat streams as arrays
+
+  protected def BinaryCodec[A]: (Schema[A], Config) => codec.BinaryCodec[A]
 
   final protected def assertDecodesToError[A](
     schema: Schema[A],
     json: CharSequence,
     error: Exception,
-    config: Configuration = Configuration.default,
+    config: Config = DefaultConfig,
     debug: Boolean = false,
   ): ZIO[Any, Nothing, TestResult] = {
     val stream = ZStream
@@ -47,7 +50,7 @@ private[circe] trait DecoderSpecs extends StringUtils {
     schema: Schema[A],
     json: CharSequence,
     value: A,
-    config: Configuration = Configuration.default,
+    config: Config = DefaultConfig,
     debug: Boolean = false,
   ): ZIO[Any, DecodeError, TestResult] = {
     val result = ZStream
@@ -67,7 +70,7 @@ private[circe] trait DecoderSpecs extends StringUtils {
     schema: Schema[A],
     json: CharSequence,
     values: Chunk[A],
-    config: Configuration = Configuration.default,
+    config: Config = DefaultConfig,
     debug: Boolean = false,
   ): ZIO[Any, DecodeError, TestResult] = {
     val result = ZStream
