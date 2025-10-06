@@ -33,7 +33,7 @@ object BuildHelper {
 
   object Versions {
 
-    val circe           = "0.14.14"
+    val circe           = "0.14.15"
     val circeDerivation = "0.13.0-M5"
     val jsoniter        = "2.38.3"
     val scalaJavaTime   = "2.6.0"
@@ -198,7 +198,7 @@ object BuildHelper {
         CrossVersion.partialVersion(scalaVersion.value) match {
           case Some((2, _)) =>
             Seq(
-              compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.3").cross(CrossVersion.full)),
+              compilerPlugin(("org.typelevel" %% "kind-projector" % "0.13.4").cross(CrossVersion.full)),
               compilerPlugin("com.olegpy" %% "better-monadic-for" % "0.3.1"),
             )
           case _            => List.empty
