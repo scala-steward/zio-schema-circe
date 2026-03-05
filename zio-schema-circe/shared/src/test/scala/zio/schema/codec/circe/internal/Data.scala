@@ -804,4 +804,44 @@ protected[circe] object Data {
   object BacktickedFieldName {
     implicit val schema: Schema[BacktickedFieldName] = DeriveSchema.gen
   }
+
+  sealed trait NestedEnum
+
+  object NestedEnum {
+
+    sealed trait Enum extends NestedEnum
+    case object Case  extends Enum
+
+    implicit val schema: Schema[NestedEnum] = DeriveSchema.gen
+  }
+
+  sealed trait DeeplyNestedEnum
+
+  object DeeplyNestedEnum {
+
+    sealed trait DeepEnumA extends DeeplyNestedEnum
+    sealed trait DeepEnumB extends DeeplyNestedEnum
+    sealed trait EnumA     extends DeepEnumA
+    sealed trait EnumB     extends DeepEnumB
+    case object CaseA      extends EnumA
+    case object CaseB      extends EnumB
+
+    implicit val schema: Schema[DeeplyNestedEnum] = DeriveSchema.gen
+  }
+
+  sealed trait HierarchicalEnum
+
+  object HierarchicalEnum {
+
+    sealed trait EnumA                  extends HierarchicalEnum
+    sealed trait EnumB                  extends HierarchicalEnum
+    sealed trait DeepEnumA              extends EnumA
+    sealed trait DeepEnumB              extends EnumB
+    case class CaseA(value: String)     extends EnumA
+    case object CaseB                   extends EnumB
+    case class DeepCaseA(value: String) extends DeepEnumA
+    case object DeepCaseB               extends DeepEnumB
+
+    implicit val schema: Schema[HierarchicalEnum] = DeriveSchema.gen
+  }
 }

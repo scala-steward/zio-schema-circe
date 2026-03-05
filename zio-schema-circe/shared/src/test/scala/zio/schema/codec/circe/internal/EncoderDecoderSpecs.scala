@@ -167,6 +167,19 @@ private[circe] trait EncoderDecoderSpecs {
           assertEncodesThenDecodes(Schema[BigEnum3], BigEnum3.Case00(123.toByte)),
         ),
       ),
+      test("nested") {
+        assertEncodesThenDecodes(Schema[NestedEnum], NestedEnum.Case)
+      },
+      test("deeply nested") {
+        assertEncodesThenDecodes(Schema[DeeplyNestedEnum], DeeplyNestedEnum.CaseA) &&
+        assertEncodesThenDecodes(Schema[DeeplyNestedEnum], DeeplyNestedEnum.CaseB)
+      },
+      test("hierarchical") {
+        assertEncodesThenDecodes(Schema[HierarchicalEnum], HierarchicalEnum.CaseA("value")) &&
+        assertEncodesThenDecodes(Schema[HierarchicalEnum], HierarchicalEnum.CaseB) &&
+        assertEncodesThenDecodes(Schema[HierarchicalEnum], HierarchicalEnum.DeepCaseA("value")) &&
+        assertEncodesThenDecodes(Schema[HierarchicalEnum], HierarchicalEnum.DeepCaseB)
+      },
     ),
   )
 }
