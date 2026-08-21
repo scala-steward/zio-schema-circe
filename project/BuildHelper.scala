@@ -33,10 +33,10 @@ object BuildHelper {
 
   object Versions {
 
-    val circe           = "0.14.15"
+    val circe           = "0.14.16"
     val circeDerivation = "0.13.0-M5"
     val jsoniter        = "2.38.17"
-    val scalaJavaTime   = "2.6.0"
+    val scalaJavaTime   = "2.7.0"
     val zio             = "2.1.26"
     val zioSchema       = "1.8.5"
   }
