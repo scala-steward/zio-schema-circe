@@ -9,20 +9,23 @@ on:
     types:
       - published
       - edited
+concurrency:
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
 jobs:
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout current branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-      - name: Restore cache
-        uses: coursier/cache-action@v8
+      - name: Restore Coursier cache
+        uses: coursier/cache-action@v8.1.1
         id: coursier-cache
       - name: Setup Scala, JDK
-        uses: coursier/setup-action@v3
+        uses: coursier/setup-action@v3.0.2
         with:
           apps: sbt
       - name: Fetch dependencies
@@ -40,14 +43,15 @@ jobs:
         scala: ['2.12.21', '2.13.18', '3.3.7']
         platform: ['JVM', 'Native', 'JS']
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout current branch
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
-      - name: Restore cache
-        uses: coursier/cache-action@v8
+      - name: Restore Coursier cache
+        uses: coursier/cache-action@v8.1.1
         id: coursier-cache
       - name: Setup Scala, JDK
-        uses: coursier/setup-action@v3
+        uses: coursier/setup-action@v3.0.2
         with:
           apps: sbt
           jvm: ${{ matrix.java }}
@@ -61,15 +65,16 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout current branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 300
       - name: Fetch tags
         run: git fetch --depth=300 origin +refs/tags/*:refs/tags/*
-      - name: Restore cache
-        uses: coursier/cache-action@v8
+      - name: Restore Coursier cache
+        uses: coursier/cache-action@v8.1.1
         id: coursier-cache
-      - uses: coursier/setup-action@v3
+      - name: Setup Scala, JDK
+        uses: coursier/setup-action@v3.0.2
         with:
           jvm: temurin:21
           apps: sbt
@@ -90,11 +95,11 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') && github.event_name != 'pull_request'
     steps:
       - name: Checkout current branch
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7.0.1
         with:
           fetch-depth: 0
       - name: Setup Scala, JDK
-        uses: coursier/setup-action@v3
+        uses: coursier/setup-action@v3.0.2
         with:
           apps: sbt
       - name: Run release
