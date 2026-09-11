@@ -38,7 +38,7 @@ object BuildHelper {
     val jsoniter        = "2.38.17"
     val scalaJavaTime   = "2.7.0"
     val zio             = "2.1.26"
-    val zioSchema       = "1.8.6"
+    val zioSchema       = "1.8.7"
   }
 
   def compilerOptions(scalaVersion: String, optimize: Boolean) = {
